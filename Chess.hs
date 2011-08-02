@@ -42,10 +42,11 @@ fromFEN fen = readPosition $ words fen
             makeLine ls = foldr ((++) . pcs) [] ls
             pcs a = if isDigit a then replicate (digitToInt a) Nothing else [Just (read [a])]
 
-toFEN brd = pieces ++ " " ++ turnstr ++ " " ++ (castlingAvail brd) ++ " " ++ enpassantstr where
+toFEN brd = pieces ++ " " ++ turnstr ++ " " ++ castString ++ " " ++ enpassantstr where
   pieces = unsplit (map fenline $ [ [ (board brd)!(j,7-i) | j<-[0..7]] | i<-[0..7]]) "/"
   turnstr = if turn brd == White then "w" else "b"
   enpassantstr = fromMaybe "-" (enpassant brd >>= \(x,y) -> return [chr (x+97), intToDigit y])
+  castString = if castlingAvail brd == "" then "-" else castlingAvail brd
   fenline pcs = concatMap tos $ foldr com [] pcs where
     tos = either show show
     com a b = case a of
