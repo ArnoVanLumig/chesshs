@@ -16,7 +16,6 @@ assertEmpty lst = assertEqual "" [] lst
 must_eq actual expected = assertEqual "" expected actual
 
 defaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -"
-defaultBoard = fromFEN defaultFEN
 
 begpos = describe "on the beginposition" [
   it "should not allow moving a white piece in blacks turn"
@@ -151,7 +150,7 @@ kingCastleCheckPosB = "8/8/8/6r1/8/8/8/4K2R w KQkq -"
 kingcastletest = describe "a kingside castle" [
   it "must be accepted" (
      let brd = fromFEN kingcastlepos in
-     case move "0-0" brd of
+     case move "O-O" brd of
        Right brd -> do
                     pieceAt 4 0 brd `must_eq` Nothing
                     pieceAt 7 0 brd `must_eq` Nothing
@@ -161,15 +160,15 @@ kingcastletest = describe "a kingside castle" [
      ),
   it "must not be allowed when piece inbetween" (
     let brd = fromFEN kingCastleInbetweenPos in
-    not $ valid "0-0" brd
+    not $ valid "O-O" brd
     ),
   it "must not be allowed when causes check" (
     let brd = fromFEN kingCastleCheckPosA in
-    not $ valid "0-0" brd
+    not $ valid "O-O" brd
     ),
   it "must not be allowed when check inbetween" (
     let brd = fromFEN kingCastleCheckPosA in
-    not $ valid "0-0" brd
+    not $ valid "O-O" brd
     )
   ]
 
@@ -180,24 +179,24 @@ queenCastleCheckPosB = "8/8/8/8/5b2/8/8/R3K3 w KQkq -"
 queencastletest = describe "a queenside castle" [
   it "must be accepted" (
      let brd = fromFEN queenCastlePos :: Board in
-     case move "0-0-0" brd of
+     case move "O-O-O" brd of
        Right brd -> pieceAt 4 0 brd == Nothing &&
                     pieceAt 7 0 brd == Nothing &&
-                    pieceAt 2 0 brd == Just (Piece White Rook) &&
-                    pieceAt 1 0 brd == Just (Piece White King)
-       Left err -> False
+                    pieceAt 3 0 brd == Just (Piece White Rook) &&
+                    pieceAt 2 0 brd == Just (Piece White King)
+       Left err -> error $ show err
      ),
   it "must not be allowed when piece inbetween" (
     let brd = fromFEN queenCastleInbetweenPos in
-    not $ valid "0-0-0" brd
+    not $ valid "O-O-O" brd
     ),
   it "must not be allowed when causes check" (
     let brd = fromFEN queenCastleCheckPosA in
-    not $ valid "0-0-0" brd
+    not $ valid "O-O-O" brd
     ),
   it "must not be allowed when check inbetween" (
     let brd = fromFEN queenCastleCheckPosA in
-    not $ valid "0-0-0" brd
+    not $ valid "O-O-O" brd
     )
   ]
 
@@ -214,26 +213,20 @@ checkmoves = describe "moves causing check" [
      )
   ]
 
-kingCastleCheck = "8/8/8/3r4/3B4/8/8/R3K2R b KQkq -"
 kingCastle = "8/p7/8/8/8/8/8/4K2R w KQkq -"
 queenCastle = "8/p7/8/8/8/8/8/R3K3 w KQkq -"
 castletest = describe "castling" [
-  it "must not be allowed kingside when king was check" (do
-     let brd = allowedMoves ["d5e5", "d4e3", "e5d5"] $ fromFEN kingCastleCheck
-     move "0-0" brd `must_eq` Left InvalidMove
-     move "0-0-0" brd `must_eq` Left InvalidMove
-     ),
   it "must not be allowed kingside when kingrook moved" (do
     let brd = allowedMoves ["h1h2", "a7a6", "h2h1", "a6a5"] $ fromFEN kingCastle
-    move "0-0" brd `must_eq` Left InvalidMove
+    move "O-O" brd `must_eq` Left InvalidMove
     ),
   it "must not be allowed queenside when queenrook has moved" (do
     let brd = allowedMoves ["a1a2", "a7a6", "a2a1", "a6a5"] $ fromFEN queenCastle
-    move "0-0-0" brd `must_eq` Left InvalidMove
+    move "O-O-O" brd `must_eq` Left InvalidMove
     ),
   it "must not be allowed when king has moved" (do
     let brd = allowedMoves ["e1e2", "a7a6", "e2e1"] $ fromFEN kingCastle
-    move "0-0" brd `must_eq` Left InvalidMove
+    move "O-O" brd `must_eq` Left InvalidMove
     )
   ]
 
@@ -260,11 +253,11 @@ fentest = describe "fen" [
      toFEN (fromFEN checkMoveA) `must_eq` checkMoveA
      toFEN (fromFEN checkMoveB) `must_eq` checkMoveB
      toFEN (fromFEN kingCastle) `must_eq` kingCastle
-     toFEN (fromFEN kingCastleCheck) `must_eq` kingCastleCheck
      toFEN (fromFEN queenCastle) `must_eq` queenCastle
      toFEN (fromFEN staleMatePos) `must_eq` staleMatePos
      toFEN (fromFEN queenCastleCheckPosA) `must_eq` queenCastleCheckPosA
      toFEN (fromFEN queenCastleCheckPosB) `must_eq` queenCastleCheckPosB
+     toFEN (fromFEN enpasPos) `must_eq` enpasPos
      )
   ]
 
@@ -282,11 +275,19 @@ matetest = describe "mate" [
      )
   ]
 
+enpasPos = "rnbqkbnr/ppp2ppp/8/3pP3/8/8/PPP1PPPP/RNBQKBNR w KQkq d6"
+enpasTest = describe "read enpassant" [
+  it "Must accept e5d6 on rnbqkbnr/ppp2ppp/8/3pP3/8/8/PPP1PPPP/RNBQKBNR w KQkq d6" (
+     let brd = fromFEN enpasPos in
+     valid "e5d6" brd
+     )
+  ]
+
 mulMovesExcept pcs lst = concat $ map (\x -> movesExcept x lst) pcs
 movesExcept pc lst = (filter (not . flip elem lst) (allMoves pc))
 allMoves pc = [pc ++ [(chr (x+97)), (intToDigit (y+1))] | x<-[0..7], y<-[0..7]]
 
-tests = descriptions [begpos, enumpos, pawn, rook, knight, bishop, queen, king, kingcastletest, queencastletest, checkmoves, castletest, promotion, fentest, stalematetest, matetest]
+tests = descriptions [begpos, enumpos, pawn, rook, knight, bishop, queen, king, kingcastletest, queencastletest, checkmoves, castletest, promotion, fentest, stalematetest, matetest, enpasTest]
 
 main = do
   hspec tests

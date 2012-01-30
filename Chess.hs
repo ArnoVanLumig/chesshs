@@ -1,19 +1,69 @@
-module Chess(MoveError(..), Color(..), PieceType(..), Piece(..), Board(..), pieceAt, pieceAtStr, fromFEN, toFEN, move, check, mate, stalemate) where
+module Chess(MoveError(..), 
+             Color(..), 
+             PieceType(..), 
+             Piece(..), 
+             Board(..), 
+             pieceAt, 
+             pieceAtStr, 
+             fromFEN, 
+             toFEN, 
+             move, 
+             moveSAN,
+             check, 
+             mate, 
+             stalemate,
+             defaultBoard
+            ) where
 
-import Control.Monad.Instances
-import Array
-import Data.Char
+import           Control.Monad.Instances
+import           Array
+import           Data.Char
 import qualified Data.List as L
-import Data.Either
-import Data.Maybe
+import           Data.Either
+import           Data.Maybe
+import           Debug.Trace
 
-data MoveError = WrongTurn | NoPiece | IsCheck | CausesCheck | InvalidMove | OverPiece | CapturesOwn deriving (Eq, Show)
-data MoveType = RegularMove | KingMove | KingRookMove | QueenRookMove | DoublePawnMove | EnPassant deriving (Eq, Show)
-data Color = Black | White deriving (Eq, Show)
-data PieceType = Rook | Knight | Bishop | Queen | King | Pawn deriving (Eq, Show)
-data Piece = Piece {clr :: Color, piece :: PieceType} deriving (Eq)
+data MoveError = WrongTurn 
+               | NoPiece 
+               | IsCheck 
+               | CausesCheck 
+               | InvalidMove 
+               | OverPiece 
+               | CapturesOwn 
+               | NoParse
+               deriving (Eq, Show)
 
-pcsList = [('r', Rook), ('n', Knight), ('b',Bishop),('q',Queen),('k', King),('p',Pawn)]
+data MoveType = RegularMove 
+              | KingMove 
+              | KingRookMove 
+              | QueenRookMove 
+              | DoublePawnMove 
+              | EnPassant 
+              deriving (Eq, Show)
+
+data Color = Black
+           | White
+           deriving (Eq, Show)
+
+data PieceType = Rook 
+               | Knight 
+               | Bishop 
+               | Queen 
+               | King 
+               | Pawn 
+               deriving (Eq, Show)
+                        
+data Piece = Piece { clr :: Color
+                   , piece :: PieceType
+                   } deriving (Eq)
+
+data Board = Board { turn :: Color
+                   , castlingAvail :: String
+                   , enpassant :: Maybe (Int, Int)
+                   , board :: Array (Int, Int) (Maybe Piece) 
+                   } deriving (Eq)
+
+pcsList = [('r', Rook), ('n', Knight), ('b', Bishop), ('q', Queen), ('k', King), ('p', Pawn)]
 pieceType a = snd $ head $ filter (\(x,y) -> toLower a == x) pcsList
 pieceName a = fst $ head $ filter(\(x,y) -> y == a) pcsList
 
@@ -24,12 +74,10 @@ instance Read Piece where
 instance Show Piece where
   show (Piece c t) = if c == White then [toUpper $ pieceName t] else [pieceName t]
   
-data Board = Board { turn :: Color, castlingAvail :: String, enpassant :: Maybe (Int, Int), board :: Array (Int, Int) (Maybe Piece) } deriving (Eq)
-
 remCastle rem brd = brd { castlingAvail = (castlingAvail brd) L.\\ rem }
 
 instance Show Board where
-  show b = unlines [ [ tos (board b ! (x,y)) | x<-[0..7] ] | y<-[0..7]] where
+  show b = unlines [ [ tos (board b ! (x,y)) | x<-[0..7] ] | y<-[7,6..0]] where
     tos p = fromMaybe ' ' (p >>= return . head . show)
              
 fromFEN fen = readPosition $ words fen
@@ -45,7 +93,7 @@ fromFEN fen = readPosition $ words fen
 toFEN brd = pieces ++ " " ++ turnstr ++ " " ++ castString ++ " " ++ enpassantstr where
   pieces = unsplit (map fenline $ [ [ (board brd)!(j,7-i) | j<-[0..7]] | i<-[0..7]]) "/"
   turnstr = if turn brd == White then "w" else "b"
-  enpassantstr = fromMaybe "-" (enpassant brd >>= \(x,y) -> return [chr (x+97), intToDigit y])
+  enpassantstr = fromMaybe "-" (enpassant brd >>= \(x,y) -> return [chr (x+97), intToDigit (y+1)])
   castString = if castlingAvail brd == "" then "-" else castlingAvail brd
   fenline pcs = concatMap tos $ foldr com [] pcs where
     tos = either show show
@@ -60,7 +108,10 @@ otherColor x = if x == White then Black else White
 isLeft (Left _) = True
 isLeft _ = False
 
+posToStr (x,y) = [chr (x + 97), chr (y + 49)]
 strToPos a = (ord (head a) - 97, digitToInt (head $ tail a) - 1)
+charToRow a = digitToInt a - 1
+charToCol a = ord a - 97
 
 split [] delim = [""]
 split (c:cs) delim
@@ -78,7 +129,9 @@ piecesOf clr brd = [ (x,y) | (x,y)<-(indices $ board brd), apprPiece $ pieceAt x
   apprPiece Nothing = False
   apprPiece (Just (Piece c p)) = c == clr
 
-kingCoords clr brd = listToMaybe [ i | (i, pc) <- (assocs $ board brd), pc == Just (Piece clr King) ]
+kingCoords clr brd = listToMaybe $ pieceCoords clr brd King
+
+pieceCoords clr brd piece = [ i | (i, pc) <- (assocs $ board brd), pc == Just (Piece clr piece) ]
 
 okMove x y x2 y2 brd = not $ isLeft $ moveAllowed x y x2 y2  brd
 
@@ -100,13 +153,13 @@ validMove x y x2 y2 brd = pieceAt x y brd >>= \piece -> validMove' piece where
     | x2 == x && y2 == y + 1 = Just RegularMove -- single step ahead
     | x2 == x && y == 1 && y2 == y + 2 = Just DoublePawnMove -- double step ahead
     | (y2 == y+1 && abs (x2-x) == 1) && (pieceAt x2 y2 brd /= Nothing) = Just RegularMove -- capture
-    | enpassant brd == Just (x2,y2) && (pieceAt x2 y brd /= Nothing) = Just EnPassant -- en passant
+    | enpassant brd == Just (x2,y2) && (pieceAt x2 y brd /= Nothing) && abs (x2-x) == 1 && y2-y == 1 = Just EnPassant -- en passant
     | otherwise = Nothing
   validMove' (Piece Black Pawn) 
     | x2 == x && y2 == y-1 = Just RegularMove -- single step ahead
     | x2 == x && y == 6 && y2 == y-2 = Just DoublePawnMove -- double step ahead
     | (y2 == y-1 && abs (x2-x) == 1) && isJust (pieceAt x2 y2 brd) = Just RegularMove -- capture
-    | enpassant brd == Just (x2,y2) && isJust (pieceAt x2 y brd) = Just EnPassant -- en passant
+    | enpassant brd == Just (x2,y2) && isJust (pieceAt x2 y brd) && abs (x2-x) == 1 && y2-y == -1 = Just EnPassant -- en passant
     | otherwise = Nothing
 
 moveAllowed x y x2 y2 brd
@@ -167,7 +220,7 @@ stalemate clr brd = case kingCoords clr brd of
   Nothing -> False
   where 
     km kx ky = [(x,y)| x<-[kx-1,kx,kx+1], y<-[ky-1,ky,ky+1], x>=0, y>=0, x<8, y<8]
-    tmpbrd = brd {turn=otherColor clr}
+    tmpbrd = brd {turn = clr}
 
 mate clr brd = check clr brd && stalemate clr brd
 
@@ -176,31 +229,68 @@ castle brd side
   | otherwise = Left InvalidMove
     where
       y = if turn brd == White then 0 else 7
-      (rookFrom, rookTo) = if side == King then (7, 5) else (0, 2)
-      (kingFrom, kingTo) = if side == King then (4, 6) else (4, 1)
+      (rookFrom, rookTo) = if side == King then (7, 5) else (0, 3)
+      (kingFrom, kingTo) = if side == King then (4, 6) else (4, 2)
       moveKing board = movePiece kingFrom y kingTo y board
       moveRook board = movePiece rookFrom y rookTo y board
-
-updateCastlingAvail brd = if check (turn brd) brd then remCastle (castcase (turn brd) "kq") brd else brd
 
 promote x y pc clr brd = case lookup (toLower pc) pcsList of
   Just pct -> Right $ putPiece x y (Just $ Piece clr pct) brd
   Nothing -> Left InvalidMove
 
 moveNoCheck x y x2 y2 moveType brd = case moveType of
-  KingRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "k") brd)
-  QueenRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "q") brd)
-  KingMove ->  let Piece clr _ = fromJust $ pieceAt x y brd in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "kq") brd)
+  KingRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd 
+                  in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "k") brd)
+  QueenRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd 
+                   in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "q") brd)
+  KingMove ->  let Piece clr _ = fromJust $ pieceAt x y brd 
+               in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "kq") brd)
   RegularMove -> swapTurn $ resetEnpassant $ movePiece x y x2 y2 brd
   DoublePawnMove -> swapTurn $ setEnpassant x2 ((y+y2) `div` 2) $ movePiece x y x2 y2 brd
   EnPassant -> swapTurn $ resetEnpassant $ movePiece x y x2 y2 $ removePiece x2 y brd
 
-move' x y x2 y2 brd = moveAllowed x y x2 y2 brd >>= \movetype -> return (updateCastlingAvail $ moveNoCheck x y x2 y2 movetype brd)
+move' x y x2 y2 brd = moveAllowed x y x2 y2 brd >>= \movetype -> return (moveNoCheck x y x2 y2 movetype brd)
 
 move mv brd
-  | mv == "0-0" = castle brd King
-  | mv == "0-0-0" = castle brd Queen
+  | mv == "O-O" = castle brd King
+  | mv == "O-O-O" = castle brd Queen
   | length mv == 5 = move (init mv) brd >>= promote x2 y2 (last mv) (turn brd)
-  | length mv == 4 = move' x y x2 y2 brd where
+  | length mv == 4 = move' x y x2 y2 brd 
+  | otherwise = error $ mv ++ " is not a valid move" where
     (x,y) = strToPos (take 2 mv)
     (x2,y2) = strToPos (drop 2 mv)
+
+moveSAN mv brd
+  | mv' == "O-O" = move "O-O" brd
+  | mv' == "O-O-O" = move "O-O-O" brd
+  | not $ head mv' `elem` "PRNBKQ" = moveSAN ('P':mv') brd
+  | last mv' `elem` "RNBQ" = moveSAN' (pieceType (head mv')) (init $ tail mv') (Just $ pieceType $ last mv') brd
+  | otherwise = moveSAN' (pieceType (head mv')) (tail mv') Nothing brd
+  where mv' = L.delete 'x' $ L.delete '+' $ L.delete '#' $ L.delete '=' mv
+
+moveSAN' piece mv promo brd
+  | length mv == 2 = -- piece and target square given
+    let potPcs = pieceCoords' piece in
+    case rights $ map (flip move brd) (potentialMoves potPcs) of
+      [x] -> Right x
+      _   -> Left NoParse
+  | head mv `elem` "0123456789" = -- starting rank given
+    let potPcs = filter (\(_,y) -> y == charToRow (head mv)) (pieceCoords' piece) in
+    case rights $ map (flip move brd) (potentialMoves potPcs) of
+      [x] -> Right x
+      _   -> Left NoParse
+  | otherwise = -- starting file given
+    let potPcs = filter (\(x,_) -> x == charToCol (head mv)) (pieceCoords' piece) in
+    case rights $ map (flip move brd) (potentialMoves potPcs) of
+      [x] -> Right x
+      _   -> Left NoParse
+  where pieceCoords' = pieceCoords (turn brd) brd
+        promoStr = case promo of
+          Just p -> [toUpper $ pieceName p]
+          Nothing -> ""
+        potentialMoves 
+          | length mv == 2 = map (\x -> posToStr x ++ mv ++ promoStr)
+          | length mv == 3 = map (\x -> posToStr x ++ tail mv ++ promoStr)
+
+defaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -"
+defaultBoard = fromFEN defaultFEN

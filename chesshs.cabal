@@ -1,6 +1,6 @@
 Name:                chesshs
 Version:             0.1
-Synopsis:            Simple library for validating chess moves
+Synopsis:            Simple library for validating chess moves and parsing PGN files
 License:             BSD3
 License-file:        LICENSE
 Author:              Arno van Lumig
@@ -10,9 +10,11 @@ Build-type:          Simple
 Cabal-version:       >=1.2
 
 Library
-  Exposed-modules:    Chess
+  Exposed-modules:    Chess, PGN
 
   Build-depends:
+    bytestring == 0.9.*,
+    attoparsec == 0.10.*,
     base >= 4 && < 5,
     containers >= 0.4,
     haskell98
