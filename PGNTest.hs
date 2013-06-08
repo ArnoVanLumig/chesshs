@@ -1,8 +1,9 @@
 module Main where
 
 import Data.ByteString.Char8 (pack, unpack)
-import IO
-import PGN
+import System.IO
+import Chess.PGN
+import Chess.FEN
 import Data.Attoparsec.ByteString.Char8
 import Control.Monad.Instances
 import Control.Monad
@@ -10,7 +11,7 @@ import Chess
 import Data.Either
 
 loadTestGame = do
-  file <- openFile "testgame.pgn" ReadMode
+  file <- openFile "./pgns/BCHIST.PGN" ReadMode
   pgn <- hGetContents file
   return $ pack pgn
 
@@ -19,7 +20,7 @@ main = do
   let eithergames = parseOnly pgnParser pgn
   case eithergames of
     Left err -> error err
-    Right games -> do 
+    Right games -> do
       mapM_ (uncurry gameprint) $ zip (map (moveSequence defaultBoard . moves) games) games
 
 -- prettyprint a game with result

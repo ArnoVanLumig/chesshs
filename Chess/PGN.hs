@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
-module PGN (pgnParser, PGN(..), GameResult(..)) where
+module Chess.PGN ( pgnParser
+                 , PGN(..)
+                 , GameResult(..)) where
 
 import Chess
 import Control.Applicative
@@ -40,13 +42,13 @@ gameParse = do
   many uselessStuff
   endResult
   return $ PGN (unpack $ tags ! "Event")
-               (unpack $ tags ! "Site") 
-               (unpack $ tags ! "Date") 
-               (unpack $ tags ! "Round") 
-               (unpack $ tags ! "White") 
-               (unpack $ tags ! "Black") 
-               gameResult 
-               Nothing 
+               (unpack $ tags ! "Site")
+               (unpack $ tags ! "Date")
+               (unpack $ tags ! "Round")
+               (unpack $ tags ! "White")
+               (unpack $ tags ! "Black")
+               gameResult
+               Nothing
                moves
 
 -- todo: handle escaping
@@ -77,10 +79,10 @@ nag = do
 
 rav = do
   char '('
-  scan 1 (\s a -> let news = if a == '(' 
-                             then s+1 
-                             else (if a == ')' 
-                                   then s-1 
+  scan 1 (\s a -> let news = if a == '('
+                             then s+1
+                             else (if a == ')'
+                                   then s-1
                                    else s) in
                   if news == 0 then Nothing else Just news)
   char ')'
@@ -94,13 +96,13 @@ comment = braceCmt <|> semiCmt where
   semiCmt = do
     char ';'
     cmt <- takeTill ((==) '\n')
-    char '\n'       
+    char '\n'
     return cmt
 
 discard a = do
   a
   return ()
-  
+
 whitespace = discard (char ' ') <|>
              discard (char '\n') <|>
              discard (string "\r\n") <|>

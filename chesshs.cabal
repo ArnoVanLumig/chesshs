@@ -1,20 +1,37 @@
 Name:                chesshs
 Version:             0.1
 Synopsis:            Simple library for validating chess moves and parsing PGN files
+Description:         With this library you can load chess boards from FEN and PGN notation and apply moves to the boards. Moves will only be allowed if they are valid under the normal chess rules.
 License:             BSD3
 License-file:        LICENSE
 Author:              Arno van Lumig
-Maintainer:          arnovanlumig@gmail.com
+Maintainer:          arno@vanlumig.com
+homepage:            http://arnovanlumig.com/chesshs.html
 Category:            Game
 Build-type:          Simple
 Cabal-version:       >=1.2
 
+Flag no-pgn
+  Description: don't include the PGN parser, this removes the attoparsec dependency
+  Default: False
+
 Library
-  Exposed-modules:    Chess, PGN
+  Exposed-modules:    Chess
+
+  if flag(no-pgn)
+    other-modules:
+      Chess.FEN
+  else
+    other-modules:
+      Chess.FEN
+      Chess.PGN
 
   Build-depends:
-    bytestring == 0.9.*,
-    attoparsec == 0.10.*,
+    bytestring >= 0.9.0.0,
     base >= 4 && < 5,
     containers >= 0.4,
-    haskell98
+    array >= 0.3.0.0
+
+  if !flag(no-pgn)
+    build-depends:
+      attoparsec >= 0.10.0.0

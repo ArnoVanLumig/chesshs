@@ -1,58 +1,56 @@
-module Chess(MoveError(..), 
-             Color(..), 
-             PieceType(..), 
-             Piece(..), 
-             Board(..), 
-             pieceAt, 
-             pieceAtStr, 
-             fromFEN, 
-             toFEN, 
-             move, 
-             moveSAN,
-             check, 
-             mate, 
-             stalemate,
-             defaultBoard
+-- | The main move validation module. FEN parsing code is in Chess.FEN and PGN parsing is in Chess.PGN
+module Chess( MoveError(..)
+            , Color(..)
+            , PieceType(..)
+            , Piece(..)
+            , Board(..)
+            , strToPos
+            , pieceAt
+            , pieceAtStr
+            , move
+            , moveSAN
+            , check
+            , mate
+            , stalemate
             ) where
 
 import           Control.Monad.Instances
-import           Array
+import           Data.Array
 import           Data.Char
 import qualified Data.List as L
 import           Data.Either
 import           Data.Maybe
-import           Debug.Trace
 
-data MoveError = WrongTurn 
-               | NoPiece 
-               | IsCheck 
-               | CausesCheck 
-               | InvalidMove 
-               | OverPiece 
-               | CapturesOwn 
-               | NoParse
+data MoveError = WrongTurn -- ^ It's not your turn
+               | NoPiece -- ^ There is no piece at the "from" position
+               | IsCheck -- ^ Your king is checked and this move doesn't solve that
+               | CausesCheck -- ^ After this move your king would be checked
+               | InvalidMove -- ^ This is not how that piece works
+               | OverPiece -- ^ You cannot move over other pieces
+               | CapturesOwn -- ^ This move captures one of your own pieces
+               | NoParse -- ^ I don't understand what you mean
                deriving (Eq, Show)
 
-data MoveType = RegularMove 
-              | KingMove 
-              | KingRookMove 
-              | QueenRookMove 
-              | DoublePawnMove 
-              | EnPassant 
+data MoveType = RegularMove
+              | KingMove -- ^ A move with the king
+              | KingRookMove -- ^ A move with the king-side rook
+              | QueenRookMove -- ^ A move with the queen-side rook
+              | DoublePawnMove -- ^ A move where a pawn makes two steps
+              | EnPassant -- ^ En-passant capture
               deriving (Eq, Show)
 
 data Color = Black
            | White
            deriving (Eq, Show)
 
-data PieceType = Rook 
-               | Knight 
-               | Bishop 
-               | Queen 
-               | King 
-               | Pawn 
+data PieceType = Rook
+               | Knight
+               | Bishop
+               | Queen
+               | King
+               | Pawn
                deriving (Eq, Show)
-                        
+
 data Piece = Piece { clr :: Color
                    , piece :: PieceType
                    } deriving (Eq)
@@ -60,7 +58,7 @@ data Piece = Piece { clr :: Color
 data Board = Board { turn :: Color
                    , castlingAvail :: String
                    , enpassant :: Maybe (Int, Int)
-                   , board :: Array (Int, Int) (Maybe Piece) 
+                   , board :: Array (Int, Int) (Maybe Piece)
                    } deriving (Eq)
 
 pcsList = [('r', Rook), ('n', Knight), ('b', Bishop), ('q', Queen), ('k', King), ('p', Pawn)]
@@ -73,35 +71,12 @@ instance Read Piece where
 
 instance Show Piece where
   show (Piece c t) = if c == White then [toUpper $ pieceName t] else [pieceName t]
-  
+
 remCastle rem brd = brd { castlingAvail = (castlingAvail brd) L.\\ rem }
 
 instance Show Board where
   show b = unlines [ [ tos (board b ! (x,y)) | x<-[0..7] ] | y<-[7,6..0]] where
     tos p = fromMaybe ' ' (p >>= return . head . show)
-             
-fromFEN fen = readPosition $ words fen
-  where readPosition (pieces:turn:castle:enpassant:_) = 
-          Board (clr turn) castle enpas board where
-            clr x = if x == "w" then White else Black
-            enpas = if enpassant == "-" then Nothing else Just $ strToPos enpassant
-            board = listArray ((0,0),(7,7)) (concat $ L.transpose $ map makeLine (reverse boardLines))
-            boardLines = split pieces '/'
-            makeLine ls = foldr ((++) . pcs) [] ls
-            pcs a = if isDigit a then replicate (digitToInt a) Nothing else [Just (read [a])]
-
-toFEN brd = pieces ++ " " ++ turnstr ++ " " ++ castString ++ " " ++ enpassantstr where
-  pieces = unsplit (map fenline $ [ [ (board brd)!(j,7-i) | j<-[0..7]] | i<-[0..7]]) "/"
-  turnstr = if turn brd == White then "w" else "b"
-  enpassantstr = fromMaybe "-" (enpassant brd >>= \(x,y) -> return [chr (x+97), intToDigit (y+1)])
-  castString = if castlingAvail brd == "" then "-" else castlingAvail brd
-  fenline pcs = concatMap tos $ foldr com [] pcs where
-    tos = either show show
-    com a b = case a of
-      Just x -> (Right x) : b
-      Nothing -> case b of 
-        ((Left n):xs) -> (Left (n+1)) : xs
-        _ -> (Left 1) : b
 
 otherColor x = if x == White then Black else White
 
@@ -109,22 +84,22 @@ isLeft (Left _) = True
 isLeft _ = False
 
 posToStr (x,y) = [chr (x + 97), chr (y + 49)]
+
+-- |Takes a position like "a5" and returns the coordinates (0,4)
+strToPos :: String -> (Int, Int)
 strToPos a = (ord (head a) - 97, digitToInt (head $ tail a) - 1)
+
 charToRow a = digitToInt a - 1
 charToCol a = ord a - 97
 
-split [] delim = [""]
-split (c:cs) delim
-   | c == delim = "" : rest
-   | otherwise = (c : head rest) : tail rest
-   where rest = split cs delim
-
-unsplit [] delim = ""
-unsplit (x:[]) delim = x
-unsplit (x:xs) delim = x ++ delim ++ (unsplit xs delim)
-
+-- |What piece is currently at this position on the board?
+pieceAtStr :: String -> Board -> Maybe Piece
 pieceAtStr a b = let (x,y) = strToPos a in pieceAt x y b
+
+-- |Like 'pieceAtStr', but with coordinates instead of a string
+pieceAt :: Int -> Int -> Board -> Maybe Piece
 pieceAt x y b = board b ! (x,y)
+
 piecesOf clr brd = [ (x,y) | (x,y)<-(indices $ board brd), apprPiece $ pieceAt x y brd ] where
   apprPiece Nothing = False
   apprPiece (Just (Piece c p)) = c == clr
@@ -155,7 +130,7 @@ validMove x y x2 y2 brd = pieceAt x y brd >>= \piece -> validMove' piece where
     | (y2 == y+1 && abs (x2-x) == 1) && (pieceAt x2 y2 brd /= Nothing) = Just RegularMove -- capture
     | enpassant brd == Just (x2,y2) && (pieceAt x2 y brd /= Nothing) && abs (x2-x) == 1 && y2-y == 1 = Just EnPassant -- en passant
     | otherwise = Nothing
-  validMove' (Piece Black Pawn) 
+  validMove' (Piece Black Pawn)
     | x2 == x && y2 == y-1 = Just RegularMove -- single step ahead
     | x2 == x && y == 6 && y2 == y-2 = Just DoublePawnMove -- double step ahead
     | (y2 == y-1 && abs (x2-x) == 1) && isJust (pieceAt x2 y2 brd) = Just RegularMove -- capture
@@ -189,7 +164,7 @@ moveAllowed x y x2 y2 brd
       owncolor = clr ownpiece
       ownpiece = fromJust $ pieceAt x y brd
 
-castleAllowed brd side =  
+castleAllowed brd side =
   pieceAt 4 y brd == Just (Piece (turn brd) King) &&
   all (\x -> isNothing $ pieceAt x y brd) nopc &&
   all (\x -> not $ check (turn brd) $ moveNoCheck 4 y x y RegularMove brd) noCheck &&
@@ -209,19 +184,25 @@ putPiece x y pc brd = brd { board = (board brd) // [((x,y),pc)]}
 removePiece x y = putPiece x y Nothing
 castcase clr c = if clr == White then map toUpper c else map toLower c
 
+-- |Is the player of the given colour check?
+check :: Color -> Board -> Bool
 check clr brd = case kingCoords clr brd of
   Just (kingX, kingY) -> any (\(x,y) -> okMove x y kingX kingY tmpbrd) otherPieces
     where otherPieces = piecesOf (otherColor clr) brd
           tmpbrd = brd {turn = otherColor clr}
   Nothing -> False
 
-stalemate clr brd = case kingCoords clr brd of 
+-- |Can the player of the given colour make any move?
+stalemate :: Color -> Board -> Bool
+stalemate clr brd = case kingCoords clr brd of
   Just (kx,ky) -> not $ any (\(x,y) -> okMove kx ky x y tmpbrd) (km kx ky)
   Nothing -> False
-  where 
+  where
     km kx ky = [(x,y)| x<-[kx-1,kx,kx+1], y<-[ky-1,ky,ky+1], x>=0, y>=0, x<8, y<8]
     tmpbrd = brd {turn = clr}
 
+-- |Is the player with the given colour checkmate
+mate :: Color -> Board -> Bool
 mate clr brd = check clr brd && stalemate clr brd
 
 castle brd side
@@ -239,11 +220,11 @@ promote x y pc clr brd = case lookup (toLower pc) pcsList of
   Nothing -> Left InvalidMove
 
 moveNoCheck x y x2 y2 moveType brd = case moveType of
-  KingRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd 
+  KingRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd
                   in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "k") brd)
-  QueenRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd 
+  QueenRookMove -> let Piece clr _ = fromJust $ pieceAt x y brd
                    in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "q") brd)
-  KingMove ->  let Piece clr _ = fromJust $ pieceAt x y brd 
+  KingMove ->  let Piece clr _ = fromJust $ pieceAt x y brd
                in moveNoCheck x y x2 y2 RegularMove (remCastle (castcase clr "kq") brd)
   RegularMove -> swapTurn $ resetEnpassant $ movePiece x y x2 y2 brd
   DoublePawnMove -> swapTurn $ setEnpassant x2 ((y+y2) `div` 2) $ movePiece x y x2 y2 brd
@@ -251,15 +232,19 @@ moveNoCheck x y x2 y2 moveType brd = case moveType of
 
 move' x y x2 y2 brd = moveAllowed x y x2 y2 brd >>= \movetype -> return (moveNoCheck x y x2 y2 movetype brd)
 
+-- | Perform a move on the board in coordinate notation like "e2e4", returning either the new board or an error
+move :: [Char] -> Board -> Either MoveError Board
 move mv brd
   | mv == "O-O" = castle brd King
   | mv == "O-O-O" = castle brd Queen
   | length mv == 5 = move (init mv) brd >>= promote x2 y2 (last mv) (turn brd)
-  | length mv == 4 = move' x y x2 y2 brd 
-  | otherwise = error $ mv ++ " is not a valid move" where
+  | length mv == 4 = move' x y x2 y2 brd
+  | otherwise = Left NoParse where
     (x,y) = strToPos (take 2 mv)
     (x2,y2) = strToPos (drop 2 mv)
 
+-- |Perform a move in SAN notation on the board and return either the new board or an error
+moveSAN :: [Char] -> Board -> Either MoveError Board
 moveSAN mv brd
   | mv' == "O-O" = move "O-O" brd
   | mv' == "O-O-O" = move "O-O-O" brd
@@ -288,9 +273,6 @@ moveSAN' piece mv promo brd
         promoStr = case promo of
           Just p -> [toUpper $ pieceName p]
           Nothing -> ""
-        potentialMoves 
+        potentialMoves
           | length mv == 2 = map (\x -> posToStr x ++ mv ++ promoStr)
           | length mv == 3 = map (\x -> posToStr x ++ tail mv ++ promoStr)
-
-defaultFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -"
-defaultBoard = fromFEN defaultFEN
