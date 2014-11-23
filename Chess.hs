@@ -76,7 +76,7 @@ remCastle rem brd = brd { castlingAvail = (castlingAvail brd) L.\\ rem }
 
 instance Show Board where
   show b = unlines [ [ tos (board b ! (x,y)) | x<-[0..7] ] | y<-[7,6..0]] where
-    tos p = fromMaybe ' ' (p >>= return . head . show)
+    tos p = fromMaybe '.' (p >>= return . head . show)
 
 otherColor x = if x == White then Black else White
 
