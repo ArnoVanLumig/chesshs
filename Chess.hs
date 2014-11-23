@@ -80,9 +80,6 @@ instance Show Board where
 
 otherColor x = if x == White then Black else White
 
-isLeft (Left _) = True
-isLeft _ = False
-
 posToStr (x,y) = [chr (x + 97), chr (y + 49)]
 
 -- |Takes a position like "a5" and returns the coordinates (0,4)
