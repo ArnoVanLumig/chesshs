@@ -1,5 +1,5 @@
 Name:                chesshs
-Version:             0.2.0
+Version:             0.2.1
 Synopsis:            Simple library for validating chess moves and parsing PGN files
 Description:         With this library you can load chess boards from FEN and PGN notation and apply moves to the boards. Moves will only be allowed if they are valid under the normal chess rules.
 License:             BSD3
